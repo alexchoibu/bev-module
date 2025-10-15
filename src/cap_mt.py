@@ -30,7 +30,7 @@ class CameraThread(threading.Thread):
                 self.frame = frame
             else:
                 time.sleep(0.1)
-        print(f"[INFO] Camera {self.cam_id} thread exiting.")
+        print(f"[INFO] Exiting camera {self.cam_id} thread")
         self.cap.release()
 
     def stop(self):
