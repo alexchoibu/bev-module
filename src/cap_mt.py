@@ -61,6 +61,29 @@ def combine_frames(frames, layout="horizontal"):
         combined = cv2.vconcat([top, bottom])
     return combined
 
+def create_bev(frames):
+    """
+    Simple example: stack resized frames in a top-down layout.
+    In practice, apply perspective transforms to each frame
+    to generate a true bird's-eye view.
+    """
+    import cv2
+    import numpy as np
+
+    # Ensure all frames are valid
+    frames = [f for f in frames if f is not None]
+    if not frames:
+        return None
+
+    # Resize frames to same shape
+    min_h = min(f.shape[0] for f in frames)
+    min_w = min(f.shape[1] for f in frames)
+    resized = [cv2.resize(f, (min_w, min_h)) for f in frames]
+
+    # Simple combination: average the images (placeholder for real top-down transform)
+    bev = np.mean(resized, axis=0).astype(np.uint8)
+    return bev
+
 # Main function
 def main():
     num_cameras = 2 # Need to change to identify specific USB cameras
@@ -73,9 +96,11 @@ def main():
     try:
         while True:
             frames = [t.frame for t in threads]
-            combined = combine_frames(frames, layout="horizontal")  # change to "vertical" or "grid"
+            birdseye_frame = create_bev(frames)
+            all_frames = frames + [birdseye_frame]
+            combined = combine_frames(all_frames, layout="grid")  # "horizontal" "vertical" or "grid"
             if combined is not None:
-                cv2.imshow("Multi-Camera View", combined)
+                cv2.imshow("Multi-View + BEV", combined)
 
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
