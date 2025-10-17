@@ -3,6 +3,8 @@ import threading
 import time
 import numpy as np
 
+from cv2_enumerate_cameras import enumerate_cameras
+
 # Thread class for each camera
 class CameraThread(threading.Thread):
     def __init__(self, cam_id, name="CameraThread"):
@@ -86,8 +88,11 @@ def create_bev(frames):
 
 # Main function
 def main():
-    num_cameras = 2 # Need to change to identify specific USB cameras
-    threads = [CameraThread(i) for i in range(num_cameras)]
+    # Identify each camera and create CameraThread instances for each
+    threads = []
+    for camera_info in enumerate_cameras(cv2.CAP_AVFOUNDATION):
+        print("Found camera:", camera_info.name, "at index", camera_info.index)
+        threads.append(CameraThread(camera_info.index, camera_info.name))
 
     # Start all camera threads
     for t in threads:
