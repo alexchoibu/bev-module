@@ -1,6 +1,22 @@
 # Final Project: BEV Camera Module
 
-This contains the Sprint Plan for the course.
+This contains the Porject Overview and Sprint Plan for the course.
+
+MVP - Demonstrate the fundamental capability of generating a 3D BEV representation from camera imagery, establishing the foundation for future multi-camera and real-time extensions. The MVP will not prioritize speed or system optimization; rather, it will validate the essential perception and transformation pipeline in a controlled environment.
+
+Minimum Goals:
+Single-Camera Image Acquisition
+Use multiple cameras to obtain static or recorded images of a known scene.
+Calibration parameters to map pixel coordinates to real-world spatial positions.
+Bird’s-Eye-View Transformation
+Transform the images into one top-down (bird’s-eye) view using geometric techniques. 
+Depth and Object Estimation
+Use object and depth detection techniques/programs to visualize the estimated object positions and distances in the transformed BEV frame.
+Visualization and Output
+Output a 2D top-down visualization showing detected objects and approximate depth contours.
+Results may be static or frame-by-frame (non–real-time), with output displayed through a desktop interface or plotted image overlay.
+Bonus Objective - Live demo of real time BEV conversion and object/depth detection.
+
 
 # 📅 Sprint Release Calendar
 
