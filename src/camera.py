@@ -2,6 +2,7 @@ import cv2
 import threading
 import time
 import numpy as np
+import os
 
 # Thread class for each camera
 class CameraThread(threading.Thread):
@@ -36,6 +37,32 @@ class CameraThread(threading.Thread):
     def stop(self):
         print(f"[INFO] Stopping camera {self.cam_id}")
         self.running = False
+
+    def capture(self):
+        print(f"[INFO] Capturing frame from camera {self.cam_id}")
+
+        image_dir = f"camera_{self.cam_id}/images"
+
+        # List existing PNG files and extract numeric parts
+        existing = []
+        for f in os.listdir(image_dir):
+            if f.endswith('.png') and f[:-4].isdigit():
+                existing.append(int(f[:-4]))
+
+        # Find the smallest available integer ≥ 0
+        n = 0
+        while n in existing:
+            n += 1
+
+        filename = f"{n}.png"
+        path = os.path.join(image_dir, filename)
+
+        success = cv2.imwrite(path, self.frame)
+
+        if success:
+            print(f"[INFO] Frame captured from camera {self.cam_id}")
+        else:
+            print(f"[ERROR] Failed to capture frame from camera {self.cam_id}")
 
 def combine_frames(frames, layout="horizontal"):
     """Combine multiple frames into a single image."""
