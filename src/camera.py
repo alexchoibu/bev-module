@@ -3,8 +3,6 @@ import threading
 import time
 import numpy as np
 
-from cv2_enumerate_cameras import enumerate_cameras
-
 # Thread class for each camera
 class CameraThread(threading.Thread):
     def __init__(self, cam_id, name="CameraThread"):
@@ -62,62 +60,3 @@ def combine_frames(frames, layout="horizontal"):
         bottom = cv2.hconcat(resized[2:])
         combined = cv2.vconcat([top, bottom])
     return combined
-
-def create_bev(frames):
-    """
-    Simple example: stack resized frames in a top-down layout.
-    In practice, apply perspective transforms to each frame
-    to generate a true bird's-eye view.
-    """
-    import cv2
-    import numpy as np
-
-    # Ensure all frames are valid
-    frames = [f for f in frames if f is not None]
-    if not frames:
-        return None
-
-    # Resize frames to same shape
-    min_h = min(f.shape[0] for f in frames)
-    min_w = min(f.shape[1] for f in frames)
-    resized = [cv2.resize(f, (min_w, min_h)) for f in frames]
-
-    # Simple combination: average the images (placeholder for real top-down transform)
-    bev = np.mean(resized, axis=0).astype(np.uint8)
-    return bev
-
-# Main function
-def main():
-    # Identify each camera and create CameraThread instances for each
-    threads = []
-    for camera_info in enumerate_cameras(cv2.CAP_AVFOUNDATION):
-        print("Found camera:", camera_info.name, "at index", camera_info.index)
-        threads.append(CameraThread(camera_info.index, camera_info.name))
-
-    # Start all camera threads
-    for t in threads:
-        t.start()
-
-    try:
-        while True:
-            frames = [t.frame for t in threads]
-            birdseye_frame = create_bev(frames)
-            all_frames = frames + [birdseye_frame]
-            combined = combine_frames(all_frames, layout="grid")  # "horizontal" "vertical" or "grid"
-            if combined is not None:
-                cv2.imshow("Multi-View + BEV", combined)
-
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-    except KeyboardInterrupt:
-        pass
-    finally:
-        # Stop all threads cleanly
-        for t in threads:
-            t.stop()
-        for t in threads:
-            t.join()
-        cv2.destroyAllWindows()
-
-if __name__ == "__main__":
-    main()
