@@ -15,8 +15,8 @@ class CameraThread(threading.Thread):
         self.running = True
 
         # Optional: set resolution
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
 
         if not self.cap.isOpened():
             print(f"[ERROR] Cannot open camera {cam_id}")
@@ -38,10 +38,13 @@ class CameraThread(threading.Thread):
         print(f"[INFO] Stopping camera {self.cam_id}")
         self.running = False
 
-    def capture(self):
+    def capture(self, calib=False):
         print(f"[INFO] Capturing frame from camera {self.cam_id}")
 
-        image_dir = f"camera_{self.cam_id}/images"
+        if calib:
+            image_dir = f"camera_{self.cam_id}/calib_imgs"
+        else:
+            image_dir = f"camera_{self.cam_id}/images"
 
         # List existing PNG files and extract numeric parts
         existing = []
