@@ -38,10 +38,13 @@ class CameraThread(threading.Thread):
         print(f"[INFO] Stopping camera {self.cam_id}")
         self.running = False
 
-    def capture(self):
+    def capture(self, calib=False):
         print(f"[INFO] Capturing frame from camera {self.cam_id}")
 
-        image_dir = f"camera_{self.cam_id}/images"
+        if calib:
+            image_dir = f"camera_{self.cam_id}/calib_imgs"
+        else:
+            image_dir = f"camera_{self.cam_id}/images"
 
         # List existing PNG files and extract numeric parts
         existing = []

@@ -27,9 +27,11 @@ def main():
                 cv2.imshow("Multi-View + BEV", combined)
 
             key = cv2.waitKey(1) & 0xFF
-            if key == ord('c') or key == ord('C'):
+            if key == ord('s') or key == ord('S'):  # Capture and save images
                 [t.capture() for t in threads]
-            elif key == ord('q'):
+            elif key == ord('c') or key == ord('C'):  # Capture and save calibration images
+                [t.capture(calib=True) for t in threads]
+            elif key == ord('q'):  # Close display
                 break
     except KeyboardInterrupt:
         pass
