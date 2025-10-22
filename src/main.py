@@ -3,12 +3,18 @@ from cv2_enumerate_cameras import enumerate_cameras
 
 import camera
 import bev
+import util
 
 # Main function
 def main():
+    # Get current operating system platform
+    cv_framework = util.get_cv_framework()
+    if cv_framework is None:
+        return
+
     # Identify each camera and create CameraThread instances for each
     threads = []
-    for camera_info in enumerate_cameras(cv2.CAP_AVFOUNDATION):
+    for camera_info in enumerate_cameras(cv_framework):
         if camera_info.name.startswith("HD"):
             print("Found USB camera:", camera_info.name, "at index", camera_info.index)
             threads.append(camera.CameraThread(camera_info.index, camera_info.name))
