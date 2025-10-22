@@ -5,6 +5,7 @@ import argparse
 
 parser = argparse.ArgumentParser(description='Camera Calibration using Chessboard Patterns with Fisheye Model')
 parser.add_argument('--camid', type=int, default=0, help='Camera ID for saving calibration results')
+parser.add_argument('--imgsave', type=bool, default=False, help='Flag to save undistorted images')
 args = parser.parse_args()
 
 def combine_frames(frames, layout="horizontal"):
@@ -85,8 +86,9 @@ for fname in images:
     combined = combine_frames([img, undistorted])
     cv.imshow(fname, combined)
     cv.waitKey(0)
-    wname = fname.split('/')[-1]
-    cv.imwrite(f"camera_{args.camid}/calib_results/{wname}", undistorted)
+    if args.imgsave:
+        wname = fname.split('/')[-1]
+        cv.imwrite(f"camera_{args.camid}/calib_results/{wname}", undistorted)
 
 cv.destroyAllWindows()
 
