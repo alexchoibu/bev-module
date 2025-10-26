@@ -1,54 +1,85 @@
-import torch
-import cv2
 import os
+import cv2
+import glob
 import numpy as np
-from torchvision import transforms
-from depth_anything_v2.dpt import DepthAnythingV2
-import matplotlib.pyplot as plt
+import torch
+from transformers import pipeline
+from PIL import Image
+
+# --- DepthEstimator class ---
+class DepthEstimator:
+    def __init__(self, model_size='small', device=None):
+        if device is None:
+            if torch.cuda.is_available():
+                device = 'cuda'
+            elif hasattr(torch, 'backends') and hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+                device = 'mps'
+            else:
+                device = 'cpu'
+        self.device = device
+        if self.device == 'mps':
+            os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
+            self.pipe_device = 'cpu'
+        else:
+            self.pipe_device = self.device
+        model_map = {
+            'small': 'depth-anything/Depth-Anything-V2-Small-hf',
+            'base': 'depth-anything/Depth-Anything-V2-Base-hf',
+            'large': 'depth-anything/Depth-Anything-V2-Large-hf'
+        }
+        model_name = model_map.get(model_size.lower(), model_map['small'])
+        self.pipe = pipeline(task="depth-estimation", model=model_name, device=self.pipe_device)
+
+    def estimate_depth(self, image):
+        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        pil_image = Image.fromarray(image_rgb)
+        depth_result = self.pipe(pil_image)
+        depth_map = depth_result["depth"]
+        if isinstance(depth_map, Image.Image):
+            depth_map = np.array(depth_map)
+        elif isinstance(depth_map, torch.Tensor):
+            depth_map = depth_map.cpu().numpy()
+        depth_min = depth_map.min()
+        depth_max = depth_map.max()
+        if depth_max > depth_min:
+            depth_map = (depth_map - depth_min) / (depth_max - depth_min)
+        return depth_map
+
+    def colorize_depth(self, depth_map, cmap=cv2.COLORMAP_INFERNO):
+        depth_map_uint8 = (depth_map * 255).astype(np.uint8)
+        return cv2.applyColorMap(depth_map_uint8, cmap)
 
 # --- Paths ---
-IMAGE_DIR = "camera_0\Outputs\yolo_results\bev_detection2"
-Depth_Output = "camera_0\Depth_Outputs"
+IMAGE_DIR = r"camera_0\Outputs\yolo_results\bev_detection2"
+Depth_Output = r"camera_0\Depth_Outputs"
 OUTPUT_DIR = os.path.join(Depth_Output, "depth_results")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# --- Load Model ---
-model = DepthAnythingV2.from_pretrained("LiheYoung/Depth-Anything-V2-ViT-Small")
-model.eval()
+# --- Initialize depth estimator ---
+depth_estimator = DepthEstimator(model_size='small')
 
-# --- Transform Setup ---
-transform = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Resize((518, 518)),
-    transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
-])
+# --- Process images ---
+image_paths = sorted(glob.glob(os.path.join(IMAGE_DIR, "*.jpg")))
 
-# --- Process Each Image ---
-for img_name in os.listdir(IMAGE_DIR):
-    if not img_name.lower().endswith(('.jpg', '.png', '.jpeg')):
-        continue
+if not image_paths:
+    print(f"No images found in {IMAGE_DIR}")
+    exit(1)
 
-    img_path = os.path.join(IMAGE_DIR, img_name)
-    img = cv2.imread(img_path)
-    rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+for img_path in image_paths:
+    base_name = os.path.basename(img_path)
+    try:
+        image = cv2.imread(img_path)
+        if image is None:
+            print(f"Failed to read {img_path}")
+            continue
+        depth_map = depth_estimator.estimate_depth(image)
+        depth_colored = depth_estimator.colorize_depth(depth_map)
+        alpha = 0.3
+        overlay = cv2.addWeighted(image, alpha, depth_colored, 1 - alpha, 0)
+        cv2.imwrite(os.path.join(OUTPUT_DIR, f"depth_{base_name}"), depth_colored)
+        cv2.imwrite(os.path.join(OUTPUT_DIR, f"overlay_{base_name}"), overlay)
+        print(f"Processed {base_name}")
+    except Exception as e:
+        print(f"Error processing {base_name}: {e}")
 
-    input_tensor = transform(rgb).unsqueeze(0)
-
-    # --- Predict Depth ---
-    with torch.no_grad():
-        depth = model(input_tensor).squeeze().cpu().numpy()
-
-    # --- Normalize Depth Map ---
-    depth_norm = (depth - depth.min()) / (depth.max() - depth.min())
-    depth_colored = (plt.cm.magma(depth_norm)[:, :, :3] * 255).astype(np.uint8)
-
-    # --- Save Outputs ---
-    depth_gray_path = os.path.join(OUTPUT_DIR, f"{os.path.splitext(img_name)[0]}_depth.png")
-    depth_color_path = os.path.join(OUTPUT_DIR, f"{os.path.splitext(img_name)[0]}_depth_colored.png")
-
-    cv2.imwrite(depth_gray_path, (depth_norm * 255).astype(np.uint8))
-    cv2.imwrite(depth_color_path, cv2.cvtColor(depth_colored, cv2.COLOR_RGB2BGR))
-
-    print(f"✅ Depth map saved for {img_name}")
-
-print("\nAll images processed! Depth maps saved in:", OUTPUT_DIR)
+print(f"All depth maps and overlays saved in {OUTPUT_DIR}")
