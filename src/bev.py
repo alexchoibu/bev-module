@@ -1,11 +1,6 @@
 import cv2
 import numpy as np
 
-def compute_homography(K, R, t):
-    """Compute homography matrix for bird's-eye view transformation."""
-    H = K @ np.hstack((R[:, :2], t))
-    return H
-
 def create_bev(cam_thread, floor_size=(8.0, 6.0), pixels_per_meter=200):
     """
     Warp camera frame to BEV using extrinsics from checkerboard.

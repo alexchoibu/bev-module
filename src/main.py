@@ -25,15 +25,6 @@ def main():
         t.start()
 
     try:
-        # Precompute homographies for each camera
-        homographies = []
-        for t in threads:
-            if hasattr(t, 'K') and hasattr(t, 'R') and hasattr(t, 't'):
-                H = bev.compute_homography(t.K, t.R, t.t)
-                homographies.append(H)
-            else:
-                homographies.append(None)  # Placeholder if parameters are missing
-
         while True:
             frames = [t.frame for t in threads]
             # birdseye_frame = bev.fake_bev(frames)
@@ -44,7 +35,7 @@ def main():
                     bev_frames.append(bev_view)
 
             if bev_frames:
-                birdseye_frame = np.mean(bev_frames, axis=0).astype(np.uint8)
+                birdseye_frame = np.mean(bev_frames, axis=0).astype(np.uint8) # Fix later to merge BEV frames
             else:
                 birdseye_frame = np.zeros((1000, 1000, 3), dtype=np.uint8)
 
