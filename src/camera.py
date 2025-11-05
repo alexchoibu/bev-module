@@ -84,6 +84,7 @@ class CameraThread(threading.Thread):
 
         self.K = fs.getNode("camera_matrix").mat()
         self.dist_coeffs = fs.getNode("dist_coeffs").mat()
+        self.Knew = fs.getNode("Knew").mat()
         fs.release()
 
     def get_extrinsic(self, checkerboard_size=(7, 9), square_size=0.020):
@@ -126,8 +127,8 @@ class CameraThread(threading.Thread):
             return
         
         # Store extrinsic parameters
-        self.rvecs = rvecs
-        self.tvecs = tvecs
+        self.R, _ = cv2.Rodrigues(rvecs)
+        self.t = tvecs
         print(f"[INFO] Extrinsic parameters computed for camera {self.cam_id}")
 
         # Visualize detected corners
