@@ -13,6 +13,7 @@ class CameraThread(threading.Thread):
         self.cap = cv2.VideoCapture(cam_id)
         self.frame = None
         self.running = True
+        self.detections = []
 
         # Optional: set resolution
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
@@ -136,6 +137,20 @@ class CameraThread(threading.Thread):
         cv2.imshow(f'Camera {self.cam_id} - Extrinsic', frame)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
+
+    def draw_detections(self, frame=None, class_names=None, color=(0,255,0)):
+        if frame is None:
+            frame = self.frame
+        if frame is None:
+            return None
+        for d in getattr(self, "detections", []):
+            x1,y1,x2,y2 = map(int, d["xyxy"])
+            conf = d["conf"]
+            cls = d["cls"]
+            label = f"{cls}:{conf:.2f}" if class_names is None else f"{class_names.get(f"{cls}")}:{conf:.2f}"
+            cv2.rectangle(frame, (x1,y1), (x2,y2), color, 2)
+            cv2.putText(frame, label, (x1, max(20,y1-5)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+        return frame
 
 def combine_frames(frames, layout="horizontal"):
     """Combine multiple frames into a single image."""

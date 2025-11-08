@@ -42,25 +42,13 @@ def create_bev(cam_thread, floor_size=(8.0, 6.0), pixels_per_meter=200):
     H = cv2.getPerspectiveTransform(img_corners, dst_corners)
     bev_frame = cv2.warpPerspective(frame_undistorted, H, (output_w, output_h))
 
-    return bev_frame
+    return bev_frame, H
 
-def fake_bev(frames):
+def project_point_to_bev(pt, H):
     """
-    Simple example: stack resized frames in a top-down layout.
-    In practice, apply perspective transforms to each frame
-    to generate a true bird's-eye view.
+    Project a single point from image coordinates to BEV coordinates using homography H.
     """
-
-    # Ensure all frames are valid
-    frames = [f for f in frames if f is not None]
-    if not frames:
-        return None
-
-    # Resize frames to same shape
-    min_h = min(f.shape[0] for f in frames)
-    min_w = min(f.shape[1] for f in frames)
-    resized = [cv2.resize(f, (min_w, min_h)) for f in frames]
-
-    # Simple combination: average the images (placeholder for real top-down transform)
-    bev = np.mean(resized, axis=0).astype(np.uint8)
-    return bev
+    pt_homog = np.array([pt[0], pt[1], 1.0])
+    bev_pt_homog = H @ pt_homog
+    bev_pt_homog /= bev_pt_homog[2]
+    return (bev_pt_homog[0], bev_pt_homog[1])
