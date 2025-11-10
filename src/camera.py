@@ -67,7 +67,7 @@ class CameraThread(threading.Thread):
         filename = f"{n}.png"
         path = os.path.join(image_dir, filename)
 
-        success = cv2.imwrite(path, self.frame)
+        success = cv2.imwrite(path, self.display_frame)
 
         if success:
             print(f"[INFO] Frame captured from camera {self.cam_id}")
