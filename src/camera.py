@@ -151,6 +151,15 @@ class CameraThread(threading.Thread):
             cv2.rectangle(frame, (x1,y1), (x2,y2), color, 2)
             cv2.putText(frame, label, (x1, max(20,y1-5)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
         return frame
+    
+    def draw_depth(self, frame=None):
+        if frame is None:
+            frame = self.frame
+        if frame is None or not hasattr(self, "depth_vis"):
+            return None
+        depth_colored = cv2.applyColorMap(self.depth_vis, cv2.COLORMAP_INFERNO)
+        combined = cv2.addWeighted(frame, 0.3, depth_colored, 0.7, 0)
+        return combined
 
 def combine_frames(frames, layout="horizontal"):
     """Combine multiple frames into a single image."""

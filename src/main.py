@@ -6,6 +6,7 @@ import camera
 import bev
 import util
 import inference
+import depth
 
 # Main function
 def main():
@@ -25,8 +26,13 @@ def main():
     for t in threads:
         t.start()
 
+    # Start YOLO inference
     inference_thread = inference.InferenceThread(threads, model_path="yolov8m.pt", device="cpu", imgsz=640, conf=0.35)
     inference_thread.start()
+
+    # Start Depth Anything inference
+    depth_thread = depth.DepthThread(threads, model_name="depth-anything/Depth-Anything-V2-Small-hf", device="mps", batch_time=0.3)
+    depth_thread.start()
 
     try:
         while True:
@@ -35,13 +41,16 @@ def main():
                 if t.frame is not None:
                     # draw camera detections on the display frame copy
                     display_frame = t.frame.copy()
+                    display_frame = t.draw_depth(display_frame)
                     t.draw_detections(display_frame, class_names=util.CLASSES)
                     # optionally save this modified frame to use in combine_frames
                     t.display_frame = display_frame
 
             bev_frames = []
             for t in threads:
-                bev_view, H = bev.create_bev(t)
+                floor_width, floor_height = (8.0, 6.0)  # meters
+                pixels_per_meter = 200
+                bev_view, H = bev.create_bev(t, floor_size=(floor_width, floor_height), pixels_per_meter=pixels_per_meter)
                 if bev_view is not None:
                     for d in t.detections:
                         x1, y1, x2, y2 = d["xyxy"]
@@ -77,6 +86,8 @@ def main():
         # Stop all threads cleanly
         inference_thread.stop()
         inference_thread.join()
+        depth_thread.stop()
+        depth_thread.join()
         for t in threads:
             t.stop()
         for t in threads:
