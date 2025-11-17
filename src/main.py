@@ -1,9 +1,12 @@
 import cv2
 from cv2_enumerate_cameras import enumerate_cameras
+import numpy as np
 
 import camera
 import bev
 import util
+import inference
+import depth
 
 # Main function
 def main():
@@ -23,11 +26,45 @@ def main():
     for t in threads:
         t.start()
 
+    # Start YOLO inference
+    inference_thread = inference.InferenceThread(threads, model_path="yolov8m.pt", device="cpu", imgsz=640, conf=0.35)
+    inference_thread.start()
+
+    # Start Depth Anything inference
+    depth_thread = depth.DepthThread(threads, model_name="depth-anything/Depth-Anything-V2-Small-hf", device="mps", batch_time=0.3)
+    depth_thread.start()
+
     try:
         while True:
-            frames = [t.frame for t in threads]
-            birdseye_frame = bev.create_bev(frames)
-            all_frames = frames + [birdseye_frame]
+            # draw detections onto camera frames
+            for t in threads:
+                if t.frame is not None:
+                    # draw camera detections on the display frame copy
+                    display_frame = t.frame.copy()
+                    display_frame = t.draw_depth(display_frame)
+                    t.draw_detections(display_frame, class_names=util.CLASSES)
+                    # optionally save this modified frame to use in combine_frames
+                    t.display_frame = display_frame
+
+            bev_frames = []
+            for t in threads:
+                floor_width, floor_height = (8.0, 6.0)  # meters
+                pixels_per_meter = 200
+                bev_view, H = bev.create_bev(t, floor_size=(floor_width, floor_height), pixels_per_meter=pixels_per_meter)
+                if bev_view is not None:
+                    for d in t.detections:
+                        x1, y1, x2, y2 = d["xyxy"]
+                        bottom_center = np.array([(x1 + x2) / 2.0, y2], dtype=np.float32)
+                        bev_x, bev_y = bev.project_point_to_bev(bottom_center, H)
+                        cv2.circle(bev_view, (int(bev_x), int(bev_y)), 5, (0, 0, 255), -1)
+                    bev_frames.append(bev_view)
+
+            if bev_frames:
+                birdseye_frame = np.mean(bev_frames, axis=0).astype(np.uint8) # Fix later to merge BEV frames
+            else:
+                birdseye_frame = np.zeros((1000, 1000, 3), dtype=np.uint8)
+
+            all_frames = [getattr(t, "display_frame", t.frame) for t in threads] + [birdseye_frame]
             combined = camera.combine_frames(all_frames, layout="grid")  # "horizontal" "vertical" or "grid"
             if combined is not None:
                 cv2.imshow("Multi-View + BEV", combined)
@@ -37,12 +74,20 @@ def main():
                 [t.capture() for t in threads]
             elif key == ord('c') or key == ord('C'):  # Capture and save calibration images
                 [t.capture(calib=True) for t in threads]
+            elif key == ord('b') or key == ord('B'):  # Save BEV image
+                if birdseye_frame is not None:
+                    cv2.imwrite("bev/birdseye_view.png", birdseye_frame)
+                    print("[INFO] Saved birdseye_view.png")
             elif key == ord('q'):  # Close display
                 break
     except KeyboardInterrupt:
         pass
     finally:
         # Stop all threads cleanly
+        inference_thread.stop()
+        inference_thread.join()
+        depth_thread.stop()
+        depth_thread.join()
         for t in threads:
             t.stop()
         for t in threads:

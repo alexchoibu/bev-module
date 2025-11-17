@@ -1,4 +1,5 @@
 # Final Project: BEV Camera Module
+Authors: Alex Choi and Sohib Shafqat
 
 This contains the Project Overview and Sprint Plan for the course.
 
