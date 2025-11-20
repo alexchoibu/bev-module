@@ -132,11 +132,15 @@ class CameraThread(threading.Thread):
         self.t = tvecs
         print(f"[INFO] Extrinsic parameters computed for camera {self.cam_id}")
 
+        # Store a reference checkerboard point for later use
+        self.checkerboard_img_point = corners2[0].ravel()
+        self.checkerboard_world_point = objp[0].reshape(3)
+
         # Visualize detected corners
-        cv2.drawChessboardCorners(frame, checkerboard_size, corners2, ret)
-        cv2.imshow(f'Camera {self.cam_id} - Extrinsic', frame)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+        #cv2.drawChessboardCorners(frame, checkerboard_size, corners2, ret)
+        #cv2.imshow(f'Camera {self.cam_id} - Extrinsic', frame)
+        #cv2.waitKey(0)
+        #cv2.destroyAllWindows()
 
     def draw_detections(self, frame=None, class_names=None, color=(0,255,0)):
         if frame is None:
@@ -149,7 +153,7 @@ class CameraThread(threading.Thread):
             cls = d["cls"]
             label = f"{cls}:{conf:.2f}" if class_names is None else f"{class_names.get(f"{cls}")}:{conf:.2f}"
             cv2.rectangle(frame, (x1,y1), (x2,y2), color, 2)
-            cv2.putText(frame, label, (x1, max(20,y1-5)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+            cv2.putText(frame, label, (x1, max(20,y1-5)), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 1)
         return frame
     
     def draw_depth(self, frame=None):

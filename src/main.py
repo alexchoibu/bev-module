@@ -46,17 +46,14 @@ def main():
                     # optionally save this modified frame to use in combine_frames
                     t.display_frame = display_frame
 
+                while getattr(t, "depth_map", None) is None:
+                    continue
+
             bev_frames = []
             for t in threads:
-                floor_width, floor_height = (8.0, 6.0)  # meters
-                pixels_per_meter = 200
-                bev_view, H = bev.create_bev(t, floor_size=(floor_width, floor_height), pixels_per_meter=pixels_per_meter)
-                if bev_view is not None:
-                    for d in t.detections:
-                        x1, y1, x2, y2 = d["xyxy"]
-                        bottom_center = np.array([(x1 + x2) / 2.0, y2], dtype=np.float32)
-                        bev_x, bev_y = bev.project_point_to_bev(bottom_center, H)
-                        cv2.circle(bev_view, (int(bev_x), int(bev_y)), 5, (0, 0, 255), -1)
+                bev_view, H, _, _ = bev.create_bev(t)
+                if bev_view is not None and H is not None:
+                    bev.draw_fov_lines(bev_view, t, t.detections, H, class_names=util.CLASSES)
                     bev_frames.append(bev_view)
 
             if bev_frames:
@@ -65,7 +62,7 @@ def main():
                 birdseye_frame = np.zeros((1000, 1000, 3), dtype=np.uint8)
 
             all_frames = [getattr(t, "display_frame", t.frame) for t in threads] + [birdseye_frame]
-            combined = camera.combine_frames(all_frames, layout="grid")  # "horizontal" "vertical" or "grid"
+            combined = camera.combine_frames(all_frames, layout="horizontal")  # "horizontal" "vertical" or "grid"
             if combined is not None:
                 cv2.imshow("Multi-View + BEV", combined)
 
