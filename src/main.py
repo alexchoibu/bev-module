@@ -39,11 +39,17 @@ def main():
             # draw detections onto camera frames
             for t in threads:
                 if t.frame is not None:
-                    # draw camera detections on the display frame copy
+                    # depth-only visualization
+                    t.dep_vis = t.draw_depth(t.frame.copy())
+
+                    # detection-only visualization
+                    t.det_vis = t.frame.copy()
+                    t.draw_detections(t.det_vis, class_names=util.CLASSES)
+
+                    # combined for display
                     display_frame = t.frame.copy()
                     display_frame = t.draw_depth(display_frame)
                     t.draw_detections(display_frame, class_names=util.CLASSES)
-                    # optionally save this modified frame to use in combine_frames
                     t.display_frame = display_frame
 
                 while getattr(t, "depth_map", None) is None:
@@ -73,8 +79,12 @@ def main():
                 [t.capture(calib=True) for t in threads]
             elif key == ord('b') or key == ord('B'):  # Save BEV image
                 if birdseye_frame is not None:
-                    cv2.imwrite("bev/birdseye_view.png", birdseye_frame)
-                    print("[INFO] Saved birdseye_view.png")
+                    for t in threads:
+                        cv2.imwrite(f"camera_{t.cam_id}/results/frame.png", t.frame)
+                        cv2.imwrite(f"camera_{t.cam_id}/results/depth.png", t.dep_vis)
+                        cv2.imwrite(f"camera_{t.cam_id}/results/detect.png", t.det_vis)
+                    cv2.imwrite(f"bev/birdseye_view.png", birdseye_frame)
+                    print("[INFO] Saved additional result images")
             elif key == ord('q'):  # Close display
                 break
     except KeyboardInterrupt:

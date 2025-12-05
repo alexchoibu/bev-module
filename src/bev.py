@@ -89,53 +89,114 @@ def compute_fov_apex_world(cam_thread):
     C_w = -cam_thread.R.T @ cam_thread.t  # shape: (3,1)
     return C_w.reshape(3)  # returns [X, Y, Z] in world coords
 
-# fallback to old ground-plane distance
-#dx = bev_pt[0] - fov_bev_pt[0]
-#dy = bev_pt[1] - fov_bev_pt[1]
-#dist_pixels = np.sqrt(dx**2 + dy**2)
-#dist_meters = dist_pixels / PIXELS_PER_METER
-#return dist_meters
+# sample small patch mean to reduce noise
+def sample_depth_mean(depth_map, px, py, k=1):
+    h, w = depth_map.shape
+    x0 = max(0, int(px)-k)
+    x1 = min(w, int(px)+k+1)
+    y0 = max(0, int(py)-k)
+    y1 = min(h, int(py)+k+1)
+    patch = depth_map[y0:y1, x0:x1]
+    patch_valid = patch[np.isfinite(patch)]
+    if patch_valid.size == 0:
+        return float(patch.mean())
+    return float(np.mean(patch_valid))
 
-def bev_pixel_distance_to_m(cam, pixel_xy, checkerboard_img_point, checkerboard_world_point):
+# fit polynomial mapping from depth_map value -> meters
+def fit_depth_model(cam, degree=2, min_points=4):
     """
-    Convert a pixel in the camera image to approximate real-world distance (meters)
-    using Depth Anything relative depth map and a checkerboard reference point.
+    Fit polynomial mapping D_meters = c0 + c1*z + c2*z^2 (degree default 2)
+    using all checkerboard corners stored in cam.cb_img_points and cam.cb_world_points.
 
-    cam: CameraThread instance
-    pixel_xy: (x, y) pixel coordinates in camera image
-    checkerboard_img_point: (x, y) pixel coordinates of checkerboard point
-    checkerboard_world_point: 3D world coordinates of checkerboard point
+    Stores coefficients in cam.depth_poly as numpy array highest to lowest (np.polyfit order).
+    Returns coeffs or None on failure.
     """
-    # Compute real-world distance from camera to checkerboard reference
-    C = -cam.R.T @ cam.t  # Camera position
-    D_ref = np.linalg.norm(checkerboard_world_point - C.reshape(3))
-
-    # Get relative depth at checkerboard point
-    cb_x, cb_y = int(checkerboard_img_point[0]), int(checkerboard_img_point[1])
-    z_ref = cam.depth_map[cb_y, cb_x]
-
-    if z_ref == 0:
-        return None  # avoid divide-by-zero
-
-    # Invert depth so that larger depth map values correspond to closer objects
-    z_ref_inv = 1.0 / z_ref
-
-    # Compute scale factor to convert inverted depth map to meters
-    depth_scale = D_ref / z_ref_inv
-
-    # Sample depth at target pixel
-    px, py = int(pixel_xy[0]), int(pixel_xy[1])
-    z_obj = cam.depth_map[py, px]
-    if z_obj == 0:
+    if not hasattr(cam, "depth_map") or cam.depth_map is None:
         return None
+    if not hasattr(cam, "cb_img_points") or cam.cb_img_points is None:
+        return None
+    
+    img_pts = cam.cb_img_points  # Nx2
+    world_pts = cam.cb_world_points  # Nx3
 
-    # Invert depth
-    z_obj_inv = 1.0 / z_obj
+    # camera center in world coords
+    C = (-cam.R.T @ cam.t).reshape(3)
 
-    # Convert to meters
-    D_obj = z_obj_inv * depth_scale
+    depth_vals = []
+    true_dists = []
+    for (px, py), world_pt in zip(img_pts, world_pts):
+        px_i = int(round(px)); py_i = int(round(py))
+        # clamp
+        py_i = np.clip(py_i, 0, cam.depth_map.shape[0]-1)
+        px_i = np.clip(px_i, 0, cam.depth_map.shape[1]-1)
+        z_val = sample_depth_mean(cam.depth_map, px_i, py_i, k=1)
+        if not np.isfinite(z_val) or z_val == 0:
+            continue
+        depth_vals.append(float(z_val))
+        true_dists.append(float(np.linalg.norm(world_pt - C)))
+    
+    depth_vals = np.array(depth_vals, dtype=np.float64)
+    true_dists = np.array(true_dists, dtype=np.float64)
 
-    return D_obj
+    # Fit polynomial of requested degree
+    coeffs = np.polyfit(depth_vals, true_dists, degree) # highest to lowest
+    cam.depth_poly = coeffs
+    print(f"[INFO] Fitted depth model (degree={degree}) coeffs:", coeffs)
+    return coeffs
+
+def predict_depth_from_model(cam, z):
+    """
+    Use cam.depth_poly (numpy array from np.polyfit highest to lowest) to predict meters.
+    """
+    if not hasattr(cam, "depth_poly") or cam.depth_poly is None:
+        return None
+    
+    # polyval expects highest to lowest
+    D = np.polyval(cam.depth_poly, z)
+    return float(D)
+
+
+# def bev_pixel_distance_to_m(cam, pixel_xy, checkerboard_img_point, checkerboard_world_point):
+#     """
+#     Convert a pixel in the camera image to approximate real-world distance (meters)
+#     using Depth Anything relative depth map and a checkerboard reference point.
+
+#     cam: CameraThread instance
+#     pixel_xy: (x, y) pixel coordinates in camera image
+#     checkerboard_img_point: (x, y) pixel coordinates of checkerboard point
+#     checkerboard_world_point: 3D world coordinates of checkerboard point
+#     """
+#     # Compute real-world distance from camera to checkerboard reference
+#     C = -cam.R.T @ cam.t  # Camera position
+#     D_ref = np.linalg.norm(checkerboard_world_point - C.reshape(3))
+
+#     # Get relative depth at checkerboard point
+#     cb_x, cb_y = int(checkerboard_img_point[0]), int(checkerboard_img_point[1])
+#     z_ref = cam.depth_map[cb_y, cb_x]
+
+#     if z_ref == 0:
+#         return None  # avoid divide-by-zero
+
+#     # Invert depth so that larger depth map values correspond to closer objects
+#     z_ref_inv = 1.0 / z_ref
+
+#     # Compute scale factor to convert inverted depth map to meters
+#     depth_scale = D_ref / z_ref_inv
+
+#     # Sample depth at target pixel
+#     px, py = int(pixel_xy[0]), int(pixel_xy[1])
+#     z_obj = cam.depth_map[py, px]
+#     if z_obj == 0:
+#         return None
+
+#     # Invert depth
+#     z_obj_inv = 1.0 / z_obj
+
+#     # Convert to meters
+#     D_obj = z_obj_inv * depth_scale
+
+#     return D_obj
+
 
 def draw_fov_lines(bev_frame, cam_thread, detections, H, class_names=None):
     """
@@ -143,6 +204,9 @@ def draw_fov_lines(bev_frame, cam_thread, detections, H, class_names=None):
     """
     if bev_frame is None or H is None:
         return
+    
+    # Ensure depth model fitted once
+    fit_depth_model(cam_thread, degree=2, min_points=4)
 
     # Compute an apex in blank BEV space
     fov_apex_bev = get_camera_apex_bev(cam_thread)
@@ -161,12 +225,14 @@ def draw_fov_lines(bev_frame, cam_thread, detections, H, class_names=None):
         pt_bev = (int(bev_det_x), int(bev_det_y))
 
         # Compute real-world distance using depth map
-        D_obj = bev_pixel_distance_to_m(
-            cam_thread,
-            bottom_center,
-            checkerboard_img_point=cam_thread.checkerboard_img_point,
-            checkerboard_world_point=cam_thread.checkerboard_world_point
-        )
+        D_obj = None
+        if getattr(cam_thread, "depth_map", None) is not None and getattr(cam_thread, "depth_poly", None) is not None:
+            # sample depth (use small mean to reduce noise)
+            img_px = int(np.clip(round(bottom_center[0]), 0, cam_thread.depth_map.shape[1]-1))
+            img_py = int(np.clip(round(bottom_center[1]), 0, cam_thread.depth_map.shape[0]-1))
+            z_obj = sample_depth_mean(cam_thread.depth_map, img_px, img_py, k=1)
+            if np.isfinite(z_obj) and z_obj != 0:
+                D_obj = predict_depth_from_model(cam_thread, z_obj)
 
         # Draw line from FOV apex to detection
         cv2.line(bev_frame, fov_apex_bev, pt_bev, (0, 255, 0), 2)
