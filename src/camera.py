@@ -15,6 +15,10 @@ class CameraThread(threading.Thread):
         self.running = True
         self.detections = []
 
+        self.cb_img_points = None
+        self.cb_world_points = None
+        self.depth_poly = []
+
         # Optional: set resolution
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
@@ -132,11 +136,13 @@ class CameraThread(threading.Thread):
         self.t = tvecs
         print(f"[INFO] Extrinsic parameters computed for camera {self.cam_id}")
 
-        # Visualize detected corners
+        # Store reference checkerboard points for later use
+        self.cb_img_points = corners2.reshape(-1, 2).astype(np.float32)
+        self.cb_world_points = objp.reshape(-1, 3).astype(np.float32)
+
+        # Save detected corners image
         cv2.drawChessboardCorners(frame, checkerboard_size, corners2, ret)
-        cv2.imshow(f'Camera {self.cam_id} - Extrinsic', frame)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+        cv2.imwrite(f"camera_{self.cam_id}/results/extrinsic.png", frame)
 
     def draw_detections(self, frame=None, class_names=None, color=(0,255,0)):
         if frame is None:
@@ -149,7 +155,7 @@ class CameraThread(threading.Thread):
             cls = d["cls"]
             label = f"{cls}:{conf:.2f}" if class_names is None else f"{class_names.get(f"{cls}")}:{conf:.2f}"
             cv2.rectangle(frame, (x1,y1), (x2,y2), color, 2)
-            cv2.putText(frame, label, (x1, max(20,y1-5)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+            cv2.putText(frame, label, (x1, max(20,y1-5)), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 1)
         return frame
     
     def draw_depth(self, frame=None):
